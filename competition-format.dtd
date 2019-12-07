@@ -1,0 +1,76 @@
+<!ELEMENT problem (optimization, rooms, courses, distributions, students, solution?)>
+<!ATTLIST problem name CDATA #REQUIRED >
+<!ATTLIST problem nrDays CDATA #REQUIRED >
+<!ATTLIST problem nrWeeks CDATA #REQUIRED >
+<!ATTLIST problem slotsPerDay CDATA #REQUIRED >
+
+<!ELEMENT optimization EMPTY>
+<!ATTLIST optimization time CDATA #REQUIRED >
+<!ATTLIST optimization room CDATA #REQUIRED >
+<!ATTLIST optimization distribution CDATA #REQUIRED >
+<!ATTLIST optimization student CDATA #REQUIRED >
+
+<!ELEMENT rooms (room*)>
+
+<!ELEMENT room (travel*,unavailable*)>
+<!ATTLIST room id CDATA #REQUIRED >
+<!ATTLIST room capacity CDATA #IMPLIED >
+<!ATTLIST room penalty CDATA #IMPLIED >
+
+<!ELEMENT travel EMPTY>
+<!ATTLIST travel room CDATA #REQUIRED >
+<!ATTLIST travel value CDATA #REQUIRED >
+
+<!ELEMENT unavailable EMPTY>
+<!ATTLIST unavailable days CDATA #REQUIRED >
+<!ATTLIST unavailable start CDATA #REQUIRED >
+<!ATTLIST unavailable length CDATA #REQUIRED >
+<!ATTLIST unavailable weeks CDATA #REQUIRED >
+
+<!ELEMENT courses (course*)>
+
+<!ELEMENT course (config*)>
+<!ATTLIST course id CDATA #REQUIRED >
+
+<!ELEMENT config (subpart+)>
+<!ATTLIST config id CDATA #REQUIRED >
+
+<!ELEMENT subpart (class+)>
+<!ATTLIST subpart id CDATA #REQUIRED >
+
+<!ELEMENT class (room*,time*,student*)>
+<!ATTLIST class id CDATA #REQUIRED >
+<!ATTLIST class parent CDATA #IMPLIED >
+<!ATTLIST class limit CDATA #IMPLIED >
+<!ATTLIST class room CDATA #IMPLIED >
+<!ATTLIST class days CDATA #IMPLIED >
+<!ATTLIST class start CDATA #IMPLIED >
+<!ATTLIST class weeks CDATA #IMPLIED >
+
+<!ELEMENT time EMPTY>
+<!ATTLIST time days CDATA #REQUIRED >
+<!ATTLIST time start CDATA #REQUIRED >
+<!ATTLIST time length CDATA #REQUIRED >
+<!ATTLIST time weeks CDATA #REQUIRED >
+<!ATTLIST time penalty CDATA #IMPLIED >
+
+<!ELEMENT distributions (distribution*)>
+
+<!ELEMENT distribution (class+)>
+<!ATTLIST distribution type CDATA #REQUIRED >
+<!ATTLIST distribution required (true|false) "false">
+<!ATTLIST distribution penalty CDATA #IMPLIED >
+
+<!ELEMENT students (student*)>
+
+<!ELEMENT student (course*)>
+<!ATTLIST student id CDATA #REQUIRED >
+
+<!ELEMENT solution (class*)>
+<!ATTLIST solution name CDATA #IMPLIED >
+<!ATTLIST solution runtime CDATA #REQUIRED >
+<!ATTLIST solution cores CDATA "1" >
+<!ATTLIST solution technique CDATA #REQUIRED >
+<!ATTLIST solution author CDATA #REQUIRED >
+<!ATTLIST solution institution CDATA #REQUIRED >
+<!ATTLIST solution country CDATA #REQUIRED >
