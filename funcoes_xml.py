@@ -143,7 +143,7 @@ class FileXML:
                                                        class_length,
                                                        class_weeks,
                                                        penalty_aux)
-                                obj_class.add_time(id_time, time_tuple)
+                                obj_class.add_time(id_time, time_tuple, penalty_aux)
 
                                 problem.add_time_tuple(id_time, time_tuple)
                             sum_max_penalties += max_penalty_time * problem.weight_time

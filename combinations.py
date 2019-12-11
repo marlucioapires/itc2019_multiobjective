@@ -145,14 +145,6 @@ def select_function_by_id_constraint(problem: Problem, type_param):
         function = Constraint.same_room
     elif type_param == Const.DIFFERENT_ROOM:
         function = Constraint.different_room
-    elif type_param == Const.MAX_DAYS:
-        function = Constraint.max_days_hard
-    elif type_param == Const.MAX_DAY_LOAD:
-        function = Constraint.max_day_load_hard
-    elif type_param == Const.MAX_BREAKS:
-        function = Constraint.max_breaks_hard
-    elif type_param == Const.MAX_BLOCK:
-        function = Constraint.max_block_hard
 
     return function
 

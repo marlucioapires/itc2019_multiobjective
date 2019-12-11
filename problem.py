@@ -63,10 +63,12 @@ class Class:
         self.parent = None
         self.childs = []
         self.times = {}
+        self.penalties_times = {}
         self.rooms = {}
 
-    def add_time(self, id_time: int, time_tuple: TimeTuple) -> None:
+    def add_time(self, id_time: int, time_tuple: TimeTuple, penalty: int) -> None:
         self.times[id_time] = time_tuple
+        self.penalties_times[id_time] = penalty
 
     def add_room(self, id_room: int, penalty: int = 0) -> None:
         self.rooms[id_room] = penalty

@@ -10,6 +10,9 @@ class Const(IntEnum):
     MIP = -3
     NOT_MIP = -4
 
+    HARD_CONFLICTS = 0
+    SOFT_CONFLICTS = 1
+
     SAME_START = 1
     SAME_TIME = 2
     DIFFERENT_TIME = 3
@@ -56,6 +59,9 @@ class StrConst(Enum):
     TIMES_OF_CLASSES = "times_of_classes"
     LIST_ID_CLASSES_NOT_ALLOCATED = "list_id_classes_not_allocated"
     STUDENTS_OF_CLASSES = "students_of_classes"
+
+    FO_1 = "objective_funtion_1"
+    FO_2 = "objective_funtion_2"
 
     SAME_START = "SameStart"
     SAME_TIME = "SameTime"

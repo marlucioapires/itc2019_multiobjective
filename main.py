@@ -3,8 +3,6 @@
 import sys
 # from functions import *
 from funcoes_xml import FileXML
-from uctp_model import UCTPModelIntegerProgramming
-from uctp_model_by_parts import UCTPModelIntegerProgrammingByParts
 # from datetime import datetime
 from combinations import *
 from output_file import OutputFile
@@ -15,6 +13,7 @@ from algorithms import Algorithm
 from typing import Tuple
 import pdb
 from multiprocessing import Pool
+from general_functions import sort_solutions
 
 
 def generate_list_of_groups_of_id_classes_to_be_processed(problem: Problem):
@@ -351,82 +350,6 @@ def select_classes_to_destroy_and_rebuild_v4(
     return list(set(list_of_id_classes_to_destroy))
 
 
-def destroy_and_rebuild_class_by_class(
-        problem, dict_of_list_id_classes_in_common_hard_constraints,
-        dict_of_common_resources, list_id_classes_not_allocated,
-        rooms_of_classes_param, times_of_classes_param, limit):
-    # list_of_classes_to_destroy = select_classes_to_destroy_and_rebuild(
-    #     dict_of_list_id_classes_in_common_hard_constraints,
-    #     dict_of_common_resources, list_id_classes_not_allocated, limit)
-    # print("LISTA DE TURMAS A SER RECONSTRUIDA: " + str(list_of_classes_to_destroy))
-
-    # list_of_classes_to_destroy = select_classes_to_destroy_and_rebuild_v2(
-    #     rooms_of_classes_param,
-    #     dict_of_list_id_classes_in_common_hard_constraints,
-    #     dict_of_common_resources, list_id_classes_not_allocated[0], problem.fixed_classes, limit)
-
-    list_of_classes_to_destroy = select_classes_to_destroy_and_rebuild_v3(
-        rooms_of_classes_param,
-        dict_of_list_id_classes_in_common_hard_constraints,
-        dict_of_common_resources, list_id_classes_not_allocated[0], problem.fixed_classes, limit)
-    print("LISTA DE TURMAS A SER RECONSTRUIDA: " + str(list_of_classes_to_destroy))
-
-    rooms_of_classes = deepcopy(rooms_of_classes_param)
-    times_of_classes = deepcopy(times_of_classes_param)
-    for id_class in list_of_classes_to_destroy:
-        if id_class in rooms_of_classes:
-            del rooms_of_classes[id_class]
-            del times_of_classes[id_class]
-
-    # random.shuffle(list_of_classes_to_destroy)
-    list_of_classes_in_sequence_of_processing = list(list_id_classes_not_allocated)
-    list_of_classes_in_sequence_of_processing.extend(list_of_classes_to_destroy)
-    random.shuffle(list_of_classes_in_sequence_of_processing)
-
-    list_of_classes_must_be_allocated = []
-    list_of_classes_must_be_allocated.extend(list(rooms_of_classes.keys()))
-
-    class_to_be_processed = 0  # Processa-se a partir da segunda turma.
-    while class_to_be_processed < len(list_of_classes_in_sequence_of_processing):
-        problem_aux = deepcopy(problem)
-        list_of_classes_to_keep = list(list_of_classes_must_be_allocated)
-        list_of_classes_to_keep.append(list_of_classes_in_sequence_of_processing[class_to_be_processed])
-        problem_aux.keep_classes(list_of_classes_to_keep)
-        problem_aux.fix_classes(rooms_of_classes, times_of_classes)
-        mip = UCTPModelIntegerProgrammingByParts(problem_aux)
-        mip.list_of_classes_must_be_allocated = list(list_of_classes_must_be_allocated)
-        mip.list_of_classes_to_be_allocated_as_possible = \
-            [list_of_classes_in_sequence_of_processing[class_to_be_processed], ]
-        error, rooms_of_classes_aux, times_of_classes_aux = mip.build_model_and_get_parcial_solution()
-        if rooms_of_classes_aux:
-            rooms_of_classes = rooms_of_classes_aux
-            times_of_classes = times_of_classes_aux
-        if (len(list_of_classes_must_be_allocated) + 1) == len(rooms_of_classes):
-            list_of_classes_must_be_allocated = list(rooms_of_classes.keys())
-        class_to_be_processed += 1
-
-    # print("TOTAL DE TURMAS ALOCADAS SEM CONFLITO NO DESTROY AND REBUILD: " + str(len(rooms_of_classes.keys())))
-    return rooms_of_classes, times_of_classes
-
-
-def validate_solution(problem, rooms_of_classes, times_of_classes):
-    list_of_classes_must_be_allocated = []
-    list_of_classes_must_be_allocated.extend(list(rooms_of_classes.keys()))
-
-    problem_aux = deepcopy(problem)
-    list_of_classes_to_keep = list(list_of_classes_must_be_allocated)
-    problem_aux.keep_classes(list_of_classes_to_keep)
-    problem_aux.fix_classes(rooms_of_classes, times_of_classes)
-    mip = UCTPModelIntegerProgrammingByParts(problem_aux)
-    mip.list_of_classes_must_be_allocated = list(list_of_classes_must_be_allocated)
-    mip.list_of_classes_to_be_allocated_as_possible = []
-    error, rooms_of_classes_aux, times_of_classes_aux = mip.build_model_and_get_parcial_solution()
-    if error or len(rooms_of_classes_aux) != len(rooms_of_classes):
-        return False
-    else:
-        return True
-
-
 def read_solution_from_json_file(solution_json_name_file: str) -> Dict:
     x = {}
     try:
@@ -453,73 +376,6 @@ def read_solution_from_json_file(solution_json_name_file: str) -> Dict:
     except json.decoder.JSONDecodeError:
         print("Arquivo nao contem uma solucao json.")
     return x
-
-
-def validate_solution_json(problem, solution_json_file):
-    solution_dict = read_solution_from_json_file(solution_json_file)
-
-    print("VERIFICANDO SE JSON EH SOLUCAO VALIDA...")
-
-    return validate_solution(problem, solution_dict[StrConst.ROOMS_OF_CLASSES.value],
-                             solution_dict[StrConst.TIMES_OF_CLASSES.value])
-
-
-def destroy_and_rebuild_group_of_classes(
-        problem, dict_of_list_id_classes_in_common_hard_constraints,
-        dict_of_common_resources, list_id_classes_not_allocated,
-        rooms_of_classes_param, times_of_classes_param, limit):
-    # list_of_classes_to_destroy = select_classes_to_destroy_and_rebuild_v2(
-    #     rooms_of_classes_param,
-    #     dict_of_list_id_classes_in_common_hard_constraints,
-    #     dict_of_common_resources, list_id_classes_not_allocated[0], problem.fixed_classes, limit)
-
-    # list_of_classes_to_destroy = select_classes_to_destroy_and_rebuild_v3(
-    #     rooms_of_classes_param,
-    #     dict_of_list_id_classes_in_common_hard_constraints,
-    #     dict_of_common_resources, list_id_classes_not_allocated[0], problem.fixed_classes, limit)
-
-    list_of_classes_to_destroy = select_classes_to_destroy_and_rebuild_v4(
-        rooms_of_classes_param,
-        dict_of_list_id_classes_in_common_hard_constraints,
-        dict_of_common_resources, list_id_classes_not_allocated[0], problem.fixed_classes, limit)
-    print("LISTA DE TURMAS A SER RECONSTRUIDA: " + str(list_of_classes_to_destroy))
-
-    rooms_of_classes = deepcopy(rooms_of_classes_param)
-    times_of_classes = deepcopy(times_of_classes_param)
-    for id_class in list_of_classes_to_destroy:
-        if id_class in rooms_of_classes:
-            del rooms_of_classes[id_class]
-            del times_of_classes[id_class]
-
-    # random.shuffle(list_of_classes_to_destroy)
-    list_of_classes_in_sequence_of_processing = list(list_id_classes_not_allocated)
-    list_of_classes_in_sequence_of_processing.extend(list_of_classes_to_destroy)
-    # random.shuffle(list_of_classes_in_sequence_of_processing)
-
-    list_of_classes_must_be_allocated = []
-    list_of_classes_must_be_allocated.extend(list(rooms_of_classes.keys()))
-
-    problem_aux = deepcopy(problem)
-    list_of_classes_to_keep = list(list_of_classes_must_be_allocated)
-    list_of_classes_to_keep.extend(list_of_classes_in_sequence_of_processing)
-    problem_aux.keep_classes(list_of_classes_to_keep)
-    problem_aux.fix_classes(rooms_of_classes, times_of_classes)
-    mip = UCTPModelIntegerProgrammingByParts(problem_aux)
-    mip.list_of_classes_must_be_allocated = list(list_of_classes_must_be_allocated)
-    mip.list_of_classes_to_be_allocated_as_possible = list_of_classes_in_sequence_of_processing
-    mip.list_of_classes_with_initial_values = list_of_classes_to_destroy
-    mip.times_of_classes = times_of_classes_param
-    mip.rooms_of_classes = rooms_of_classes_param
-    error, rooms_of_classes_aux, times_of_classes_aux = mip.build_model_and_get_parcial_solution()
-    if error:
-        return error, rooms_of_classes, times_of_classes
-    elif rooms_of_classes_aux:
-        rooms_of_classes = rooms_of_classes_aux
-        times_of_classes = times_of_classes_aux
-
-    print("TAMANHO DE ROOMS_OF_CLASSES: " + str(len(rooms_of_classes)))
-    # print("TOTAL DE TURMAS ALOCADAS SEM CONFLITO NO DESTROY AND REBUILD: " + str(len(rooms_of_classes.keys())))
-    return error, rooms_of_classes, times_of_classes
 
 
 def select_id_classes_with_hard_constraints_type_same(problem):
@@ -626,128 +482,6 @@ def generate_list_of_id_classes_in_sequence_of_processing_v2(problem: Problem) -
             list_of_classes_in_sequence_of_processing.append(id_class)
 
     return list_of_classes_in_sequence_of_processing
-
-
-def simulated_annealing(
-        problem: Problem, start_time, rooms_of_classes_param, times_of_classes_param, alpha: float,
-        max_iterations: int, initial_temp: float, final_temp: float, output_file=None,
-        json_file=None):
-    list_id_classes_not_allocated = []
-    for id_class in problem.classes.keys():
-        if id_class not in rooms_of_classes_param:
-            list_id_classes_not_allocated.append(id_class)
-
-    if output_file:
-        print("GRAVANDO ARQUIVO .OUT")
-        output_file.write("TURMAS NAO ALOCADAS: %d / %d" %
-                          (len(list_id_classes_not_allocated), len(problem.classes.keys())))
-        output_file.write(list_id_classes_not_allocated)
-    print("TURMAS NAO ALOCADAS:")
-    print(list_id_classes_not_allocated)
-
-    print("GERANDO DICIONARIO DE TURMAS COM RECURSOS EM COMUM...")
-    dict_of_common_resources = generate_dict_of_common_resources(problem)
-    print("GERANDO DICIONARIO DE TURMAS COM RESTRICOES FORTES EM COMUM...")
-    dict_of_id_classes_in_common_hard_constraints = \
-        generate_dict_of_id_classes_in_common_hard_constraints(problem)
-    limit = 50
-    # max_limit = 50
-    # min_limit = 10
-
-    rooms_of_classes = deepcopy(rooms_of_classes_param)
-    times_of_classes = deepcopy(times_of_classes_param)
-
-    old_value_objective_function = len(list_id_classes_not_allocated)
-    best_objective_function = old_value_objective_function
-
-    num_iter = 0
-    while initial_temp > final_temp:
-        while num_iter < max_iterations:
-            num_iter += 1
-            id_class_selected = random.choice(list_id_classes_not_allocated)
-            print("TURMA SELECIONADA PARA REBUILD: C%d" % id_class_selected)
-            error, rooms_of_classes_aux, times_of_classes_aux = \
-                destroy_and_rebuild_group_of_classes(
-                    problem, dict_of_id_classes_in_common_hard_constraints,
-                    dict_of_common_resources, [id_class_selected, ],
-                    rooms_of_classes, times_of_classes, limit)
-
-            # rooms_of_classes_aux, times_of_classes_aux = \
-            #     destroy_and_rebuild_class_by_class(
-            #         problem, dict_of_id_classes_in_common_hard_constraints,
-            #         dict_of_common_resources, [id_class_selected, ],
-            #         rooms_of_classes, times_of_classes, limit)
-
-            end_time = (time.time() - start_time)
-
-            if error:
-                if output_file:
-                    print("GRAVANDO ARQUIVO .OUT")
-                    output_file.write("ERRO NA OTIMIZACAO: " + str(error))
-                print("ERRO NA OTIMIZACAO: " + str(error))
-                # if limit >= (min_limit + 10):
-                #     print("TAMANHO DO GRUPO DE TURMAS A SER RECONSTRUIDO DIMINUIDO DE %d PARA %d." %
-                #           (limit, (limit - 10)))
-                #     limit -= 10
-
-            new_value_objective_function = len(problem.classes) - len(rooms_of_classes_aux)
-            delta = new_value_objective_function - old_value_objective_function
-
-            if delta < 0:
-                print("MELHOROU!!! (%s)" % str(date_time()))
-                old_value_objective_function = new_value_objective_function
-                rooms_of_classes = deepcopy(rooms_of_classes_aux)
-                times_of_classes = deepcopy(times_of_classes_aux)
-                list_id_classes_not_allocated = []
-                for id_class in problem.classes.keys():
-                    if id_class not in rooms_of_classes:
-                        list_id_classes_not_allocated.append(id_class)
-                if new_value_objective_function < best_objective_function:
-                    if json_file:
-                        print("GRAVANDO SOLUCAO NO ARQUIVO .JSON")
-                        f = open(json_file, 'w')
-                        json_obj = {"instance": problem.name,
-                                    "datetime": date_time(),
-                                    "runtime": end_time,
-                                    "rooms_of_classes": rooms_of_classes,
-                                    "times_of_classes": times_of_classes,
-                                    "list_id_classes_not_allocated": list_id_classes_not_allocated}
-                        json.dump(json_obj, f)
-                        f.close()
-                    best_objective_function = new_value_objective_function
-                    if output_file:
-                        print("GRAVANDO ARQUIVO .OUT")
-                        output_file.write(date_time())
-                        output_file.write("TURMA SELECIONADA PARA REBUILD: C%d" % id_class_selected)
-                        output_file.write("TURMAS NAO ALOCADAS: %d / %d" %
-                                          (len(list_id_classes_not_allocated), len(problem.classes.keys())))
-                        output_file.write(list_id_classes_not_allocated)
-                    print(date_time())
-                    print("TURMA SELECIONADA PARA REBUILD: C%d" % id_class_selected)
-                    print("TURMAS NAO ALOCADAS:")
-                    print(list_id_classes_not_allocated)
-
-                if new_value_objective_function == 0:
-                    return rooms_of_classes_aux, times_of_classes_aux
-            # elif random.random() < math.exp(-delta / initial_temp):
-            #     print("PIOROU A SOLUCAO! (%s)" % str(datetime()))
-            #     old_value_objective_function = new_value_objective_function
-            #     rooms_of_classes = deepcopy(rooms_of_classes_aux)
-            #     times_of_classes = deepcopy(times_of_classes_aux)
-            #     list_id_classes_not_allocated = []
-            #     for id_class in problem.classes.keys():
-            #         if id_class not in rooms_of_classes:
-            #             list_id_classes_not_allocated.append(id_class)
-            # elif not error and limit <= (max_limit - 10):
-            #     print("TAMANHO DO GRUPO DE TURMAS A SER RECONSTRUIDO AUMENTADO DE %d PARA %d." %
-            #           (limit, (limit + 10)))
-            #     limit += 10
-
-        initial_temp = initial_temp * alpha
-        num_iter = 0
-        print(">>>>>>>>>>>>>>>>>>>>>> TEMPERATURA: " + str(initial_temp))
-
-    return rooms_of_classes, times_of_classes
 
 
 def greedy_algorithm_class_by_class(problem: Problem, start_time, output_file=None, json_file=None):
@@ -885,10 +619,10 @@ def greedy_algorithm_class_by_class(problem: Problem, start_time, output_file=No
         json.dump(json_obj, f)
         f.close()
 
-    result = validate_solution(problem, rooms_of_classes, times_of_classes)
-    if result:
-        print("A SOLUCAO CONSTRUIDA EH PARCIALMENTE FACTIVEL!")
-        # input("PRESS ENTER...")
+    # result = validate_solution(problem, rooms_of_classes, times_of_classes)
+    # if result:
+    #     print("A SOLUCAO CONSTRUIDA EH PARCIALMENTE FACTIVEL!")
+    #     input("PRESS ENTER...")
 
     # if len(rooms_of_classes) == len(problem.classes):
     #     if output_file:
@@ -2054,203 +1788,6 @@ def fix_and_optimize_with_greedy_algorithm_and_multiprocessing(
     # return rooms_of_classes, times_of_classes
 
 
-def optimization_class_by_class(problem: Problem, start_time, output_file=None, json_file=None):
-    list_of_classes_in_sequence_of_processing = \
-        generate_list_of_id_classes_in_sequence_of_processing(problem)
-
-    if output_file:
-        print("GRAVANDO ARQUIVO .OUT")
-        output_file.write(date_time())
-        output_file.write("LISTA DE TURMAS FIXAS: " + str(problem.fixed_classes))
-    print("LISTA DE TURMAS FIXAS: " + str(problem.fixed_classes))
-
-    if output_file:
-        print("GRAVANDO ARQUIVO .OUT")
-        output_file.write("\nLISTA DAS DEMAIS TURMAS NA SEQUENCIA DE PROCESSAMENTO: " +
-                          str(list_of_classes_in_sequence_of_processing))
-    print("\nLISTA DAS DEMAIS TURMAS NA SEQUENCIA DE PROCESSAMENTO: " +
-          str(list_of_classes_in_sequence_of_processing))
-
-    # list_of_classes_in_sequence_of_processing = \
-    #     generate_list_of_id_classes_in_sequence_of_processing_v2(problem)
-
-    list_of_classes_must_be_allocated = []
-    list_of_classes_must_be_allocated.extend(problem.fixed_classes)
-
-    list_of_classes_must_be_allocated.append(list_of_classes_in_sequence_of_processing[0])
-    if output_file:
-        print("GRAVANDO ARQUIVO .OUT")
-        output_file.write("INICIANDO PROCESSAMENTO DA TURMA C%d" % list_of_classes_in_sequence_of_processing[0])
-    print("INICIANDO PROCESSAMENTO DA TURMA C%d" % list_of_classes_in_sequence_of_processing[0])
-
-    # print("INICIO DA ALOCACAO INICIAL OBRIGATORIA")
-    problem_aux = deepcopy(problem)
-    problem_aux.keep_classes(list_of_classes_must_be_allocated)
-    mip = UCTPModelIntegerProgrammingByParts(problem_aux)
-    mip.list_of_classes_must_be_allocated = list(list_of_classes_must_be_allocated)
-    error, rooms_of_classes, times_of_classes = mip.build_model_and_get_parcial_solution()
-    # print("FIM DA ALOCACAO INICIAL OBRIGATORIA")
-    # input("PRESS ENTER...")
-    if len(rooms_of_classes) == len(problem.classes):
-        return transfer_solution(problem, rooms_of_classes, times_of_classes)
-    elif len(list_of_classes_must_be_allocated) == len(problem.classes):
-        # Foi realizada tentativa de alocação de todas as turmas e
-        # não se obteve sucesso.
-        return None
-
-    class_to_be_processed = 1  # Processa-se a partir da segunda turma.
-    while class_to_be_processed < len(list_of_classes_in_sequence_of_processing):
-        problem_aux = deepcopy(problem)
-        if output_file:
-            print("GRAVANDO ARQUIVO .OUT")
-            output_file.write("INICIANDO PROCESSAMENTO DA TURMA C%d" %
-                              list_of_classes_in_sequence_of_processing[class_to_be_processed])
-        print("INICIANDO PROCESSAMENTO DA TURMA C%d" % list_of_classes_in_sequence_of_processing[class_to_be_processed])
-        list_of_classes_to_keep = list(list_of_classes_must_be_allocated)
-        list_of_classes_to_keep.append(list_of_classes_in_sequence_of_processing[class_to_be_processed])
-        problem_aux.keep_classes(list_of_classes_to_keep)
-        problem_aux.fix_classes(rooms_of_classes, times_of_classes)
-        mip = UCTPModelIntegerProgrammingByParts(problem_aux)
-        mip.list_of_classes_must_be_allocated = list(list_of_classes_must_be_allocated)
-        mip.list_of_classes_to_be_allocated_as_possible = \
-            [list_of_classes_in_sequence_of_processing[class_to_be_processed], ]
-        error, rooms_of_classes_aux, times_of_classes_aux = mip.build_model_and_get_parcial_solution()
-        if rooms_of_classes_aux:
-            rooms_of_classes = rooms_of_classes_aux
-            times_of_classes = times_of_classes_aux
-        if len(rooms_of_classes) == len(problem.classes):
-            if output_file:
-                print("GRAVANDO ARQUIVO .OUT")
-                output_file.write("SUCESSO! SOLUCAO ENCONTRADA!")
-            print("SUCESSO! SOLUCAO ENCONTRADA!")
-            return transfer_solution(problem, rooms_of_classes, times_of_classes)
-        else:
-            if (len(list_of_classes_must_be_allocated) + 1) == len(rooms_of_classes):
-                if output_file:
-                    print("GRAVANDO ARQUIVO .OUT")
-                    output_file.write("PROSSEGUE...")
-                print("PROSSEGUE...")
-                list_of_classes_must_be_allocated = list(rooms_of_classes.keys())
-            else:
-                if output_file:
-                    print("GRAVANDO ARQUIVO .OUT")
-                    output_file.write("SALTA...")
-                print("SALTA...")
-            class_to_be_processed += 1
-
-    if output_file:
-        print("GRAVANDO ARQUIVO .OUT")
-        output_file.write(date_time())
-        output_file.write("*** TOTAL DE TURMAS ALOCADAS SEM CONFLITO: " + str(len(rooms_of_classes.keys())))
-    print(date_time())
-    print("*** TOTAL DE TURMAS ALOCADAS SEM CONFLITO: " + str(len(rooms_of_classes.keys())))
-
-    if json_file:
-        print("GRAVANDO SOLUCAO NO ARQUIVO .JSON")
-        end_time = (time.time() - start_time)
-        list_id_classes_not_allocated = []
-        for id_class in problem.classes.keys():
-            if id_class not in rooms_of_classes:
-                list_id_classes_not_allocated.append(id_class)
-        f = open(json_file, 'w')
-        json_obj = {"instance": problem.name,
-                    "datetime": date_time(),
-                    "runtime": end_time,
-                    "rooms_of_classes": rooms_of_classes,
-                    "times_of_classes": times_of_classes,
-                    "list_id_classes_not_allocated": list_id_classes_not_allocated}
-        json.dump(json_obj, f)
-        f.close()
-
-    # return None
-    # input("PRESS ENTER...")
-    # print(dict_of_id_classes_in_common_hard_constraints)
-    if len(rooms_of_classes) == len(problem.classes):
-        if output_file:
-            print("GRAVANDO ARQUIVO .OUT")
-            output_file.write("SUCESSO! SOLUCAO ENCONTRADA!")
-        print("SUCESSO! SOLUCAO ENCONTRADA!")
-        # input("PRESS ENTER...")
-        return transfer_solution(problem, rooms_of_classes, times_of_classes)
-
-    if output_file:
-        print("GRAVANDO ARQUIVO .OUT")
-        output_file.write("INICIANDO SIMULATED ANNEALING...")
-    print("INICIANDO SIMULATED ANNEALING...")
-    rooms_of_classes, times_of_classes = \
-        simulated_annealing(problem, start_time, rooms_of_classes, times_of_classes,
-                            0.999, 100, 10000, 0.00001, output_file, json_file)
-
-    if len(rooms_of_classes) == len(problem.classes):
-        if output_file:
-            print("GRAVANDO ARQUIVO .OUT")
-            output_file.write("SUCESSO! SOLUCAO ENCONTRADA!")
-        print("SUCESSO! SOLUCAO ENCONTRADA!")
-        # input("PRESS ENTER...")
-        return transfer_solution(problem, rooms_of_classes, times_of_classes)
-    else:
-        return None
-
-
-def optimization_class_by_class_with_initial_solution(
-        problem: Problem, output_file=None, json_file=None,
-        initial_solution_file=None):
-    if not initial_solution_file:
-        return None
-    else:
-        f = open(initial_solution_file, 'r')
-        x = json.load(f)
-        f.close()
-
-    rooms_of_classes = {}
-    rooms_of_classes_aux = x.get("rooms_of_classes")
-    for k, r in rooms_of_classes_aux.items():
-        rooms_of_classes[int(k)] = r
-
-    times_of_classes = {}
-    times_of_classes_aux = x.get("times_of_classes")
-    for k, t in times_of_classes_aux.items():
-        times_of_classes[int(k)] = t
-
-    start_time = time.time() - x.get("runtime")
-
-    if output_file:
-        print("GRAVANDO ARQUIVO .OUT")
-        output_file.write(date_time())
-        output_file.write("*** TOTAL DE TURMAS ALOCADAS SEM CONFLITO: " + str(len(rooms_of_classes.keys())))
-    print(date_time())
-    print("*** TOTAL DE TURMAS ALOCADAS SEM CONFLITO: " + str(len(rooms_of_classes.keys())))
-
-    # return None
-    # input("PRESS ENTER...")
-    # print(dict_of_id_classes_in_common_hard_constraints)
-    if len(rooms_of_classes) == len(problem.classes):
-        if output_file:
-            print("GRAVANDO ARQUIVO .OUT")
-            output_file.write("SUCESSO! SOLUCAO ENCONTRADA!")
-        print("SUCESSO! SOLUCAO ENCONTRADA!")
-        # input("PRESS ENTER...")
-        return transfer_solution(problem, rooms_of_classes, times_of_classes)
-
-    if output_file:
-        print("GRAVANDO ARQUIVO .OUT")
-        output_file.write("INICIANDO SIMULATED ANNEALING...")
-    print("INICIANDO SIMULATED ANNEALING...")
-    rooms_of_classes, times_of_classes = \
-        simulated_annealing(problem, start_time, rooms_of_classes, times_of_classes,
-                            0.999, 100, 10000, 0.00001, output_file, json_file)
-
-    if len(rooms_of_classes) == len(problem.classes):
-        if output_file:
-            print("GRAVANDO ARQUIVO .OUT")
-            output_file.write("SUCESSO! SOLUCAO ENCONTRADA!")
-        print("SUCESSO! SOLUCAO ENCONTRADA!")
-        # input("PRESS ENTER...")
-        return transfer_solution(problem, rooms_of_classes, times_of_classes)
-    else:
-        return None
-
-
 def temporary_function(problem: Problem, json_solution) -> Solution:
     solution = Algorithm.build_greedy_initial_solution(problem)
     Algorithm.enroll_students(solution)
@@ -2275,128 +1812,6 @@ def temporary_function(problem: Problem, json_solution) -> Solution:
           str(Algorithm.validate_respect_of_hard_constraints_in_solution(
               problem, rooms_of_classes, times_of_classes)))
 
-    return solution
-
-
-def optimization_with_gurobi(
-        problem: Problem, start_time: float
-) -> Solution:
-    mip_uctp = UCTPModelIntegerProgramming(problem)
-
-    # mip_uctp.hard_constraints_to_add[Const.SAME_START] = False
-    # mip_uctp.hard_constraints_to_add[Const.SAME_TIME] = False
-    # mip_uctp.hard_constraints_to_add[Const.DIFFERENT_TIME] = False
-    # mip_uctp.hard_constraints_to_add[Const.SAME_DAYS] = False
-    # mip_uctp.hard_constraints_to_add[Const.DIFFERENT_DAYS] = False
-    # mip_uctp.hard_constraints_to_add[Const.SAME_WEEKS] = False
-    # mip_uctp.hard_constraints_to_add[Const.DIFFERENT_WEEKS] = False
-    # mip_uctp.hard_constraints_to_add[Const.OVERLAP] = False
-    # mip_uctp.hard_constraints_to_add[Const.NOT_OVERLAP] = False
-    # mip_uctp.hard_constraints_to_add[Const.PRECEDENCE] = False
-    # mip_uctp.hard_constraints_to_add[Const.SAME_ROOM] = False
-    # mip_uctp.hard_constraints_to_add[Const.DIFFERENT_ROOM] = False
-    # mip_uctp.hard_constraints_to_add[Const.SAME_ATTENDEES] = False
-    # mip_uctp.hard_constraints_to_add[Const.WORK_DAY] = False
-    # mip_uctp.hard_constraints_to_add[Const.MIN_GAP] = False
-    # mip_uctp.hard_constraints_to_add[Const.MAX_DAYS] = False
-    # mip_uctp.hard_constraints_to_add[Const.MAX_DAY_LOAD] = False
-    # mip_uctp.hard_constraints_to_add[Const.MAX_BREAKS] = False
-    # mip_uctp.hard_constraints_to_add[Const.MAX_BLOCK] = False
-
-    # mip_uctp.soft_constraints_to_add[Const.SAME_START] = False
-    # mip_uctp.soft_constraints_to_add[Const.SAME_TIME] = False
-    # mip_uctp.soft_constraints_to_add[Const.DIFFERENT_TIME] = False
-    # mip_uctp.soft_constraints_to_add[Const.SAME_DAYS] = False
-    # mip_uctp.soft_constraints_to_add[Const.DIFFERENT_DAYS] = False
-    # mip_uctp.soft_constraints_to_add[Const.SAME_WEEKS] = False
-    # mip_uctp.soft_constraints_to_add[Const.DIFFERENT_WEEKS] = False
-    # mip_uctp.soft_constraints_to_add[Const.OVERLAP] = False
-    # mip_uctp.soft_constraints_to_add[Const.NOT_OVERLAP] = False
-    # mip_uctp.soft_constraints_to_add[Const.PRECEDENCE] = False
-    # mip_uctp.soft_constraints_to_add[Const.SAME_ROOM] = False
-    # mip_uctp.soft_constraints_to_add[Const.DIFFERENT_ROOM] = False
-    # mip_uctp.soft_constraints_to_add[Const.SAME_ATTENDEES] = False
-    # mip_uctp.soft_constraints_to_add[Const.WORK_DAY] = False
-    # mip_uctp.soft_constraints_to_add[Const.MIN_GAP] = False
-    # mip_uctp.soft_constraints_to_add[Const.MAX_DAYS] = False
-    # mip_uctp.soft_constraints_to_add[Const.MAX_DAY_LOAD] = False
-    # mip_uctp.soft_constraints_to_add[Const.MAX_BREAKS] = False
-    # mip_uctp.soft_constraints_to_add[Const.MAX_BLOCK] = False
-
-    # mip_uctp.hard_constraints_to_add_cuts[Const.SAME_START] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.SAME_TIME] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.DIFFERENT_TIME] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.SAME_DAYS] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.DIFFERENT_DAYS] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.SAME_WEEKS] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.DIFFERENT_WEEKS] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.OVERLAP] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.NOT_OVERLAP] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.PRECEDENCE] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.SAME_ROOM] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.DIFFERENT_ROOM] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.SAME_ATTENDEES] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.WORK_DAY] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.MIN_GAP] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.MAX_DAYS] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.MAX_DAY_LOAD] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.MAX_BREAKS] = True
-    # mip_uctp.hard_constraints_to_add_cuts[Const.MAX_BLOCK] = True
-
-    name_file = "final_results\\middle\\saida_pu-proj-fal19.json"
-    xml_file = "output\\saida_pu-proj-fal19.xml"
-    json_file = "output\\saida_pu-proj-fal19.json"
-    if name_file:
-        mip_uctp.param_initial_solution = read_solution_from_json_file(name_file)
-        if mip_uctp.param_initial_solution:
-            # print(mip_uctp.param_initial_solution)
-            solution = temporary_function(problem, mip_uctp.param_initial_solution)
-            if solution:
-                solution.runtime = "%s" % round(mip_uctp.param_initial_solution[StrConst.RUNTIME.value], 1)
-                solution_xml_file = xml_file
-                name_json_file = json_file
-                if solution_xml_file:
-                    print("GRAVANDO SOLUCAO...")
-                    FileXML.write_file_xml(solution_xml_file, solution)
-                    write_file_json(name_json_file, solution, solution.runtime)
-                    FileXML.validate_file_xml(solution_xml_file, "competition-format.dtd")
-                else:
-                    solution_string_xml = solution.string_to_xml()
-                    print(solution_string_xml)
-
-            end_time = (time.time() - start_time)
-            print("--- TEMPO TOTAL DE EXECUCAO: %s seconds ---" % round(end_time, 3))
-            sys.exit(0)
-
-    mip_uctp.param_add_hard_constraints = True
-    # mip_uctp.param_add_hard_constraints = False
-
-    # mip_uctp.param_use_cliques = True
-    mip_uctp.param_use_cliques = False
-
-    # mip_uctp.param_add_soft_constraints = True
-    mip_uctp.param_add_soft_constraints = False
-
-    # mip_uctp.param_add_constraints_for_students_enrollment = True
-    mip_uctp.param_add_constraints_for_students_enrollment = False
-
-    # mip_uctp.param_lazy_constraints = True
-
-    # mip_uctp.param_time_limit = 100
-
-    # mip_uctp.param_max_solutions = 1
-
-    # mip_uctp.param_threads = 1
-
-    # mip_uctp.param_relax = True
-
-    solution = mip_uctp.build_model_and_get_solution()
-
-    end_time = (time.time() - start_time)
-    if solution:
-        solution.runtime = "%s" % round(end_time, 1)
-    print("--- SOLUCAO: %s seconds ---" % round(end_time, 3))
-    
     return solution
 
 
@@ -2605,9 +2020,37 @@ def main(pool):
         # relax = True
         # add_soft_constraints = False
         # add_hard_constraints = False
-        solution = optimization_with_gurobi(problem, start_time)
+        # solution = optimization_with_gurobi(problem, start_time)
 
         # solution = optimization_with_gurobi(problem, start_time)
+
+        # params_dict[StrConst.OUTPUT_FILE] = params_dict[StrConst.SOLUTION_XML_FILE].split('.')[0]
+        # params_dict[StrConst.JSON_FILE] = params_dict[StrConst.SOLUTION_XML_FILE].split('.')[0]
+        # solution = test_multiprocessing(
+        #     pool, problem, start_time, params_dict[StrConst.OUTPUT_FILE], params_dict[StrConst.JSON_FILE], 1000)
+
+
+
+        # dict = read_solution_from_json_file("output\\saida_wbg-fal10.json")
+        # penalties = Algorithm.calculate_objective_function_1(
+        #     problem, dict[StrConst.ROOMS_OF_CLASSES.value],
+        #     dict[StrConst.TIMES_OF_CLASSES.value])
+        # print("PENALIDADES DE SALA E HORARIO: " + str(penalties))
+        # penalties = Algorithm.calculate_objective_function_2(
+        #     problem, dict[StrConst.ROOMS_OF_CLASSES.value],
+        #     dict[StrConst.TIMES_OF_CLASSES.value])
+        # print("PENALIDADES DE DISTRIBUICAO: " + str(penalties))
+
+        list = Algorithm.generate_list_of_solutions(problem, 10)
+        print("SOLUCOES NAO ORDENADAS:")
+        for i in list:
+            print(i[StrConst.FO_1.value], i[StrConst.FO_2.value])
+        sort_solutions(list)
+        print("SOLUCOES ORDENADAS:")
+        for i in list:
+            print(i[StrConst.FO_1.value], i[StrConst.FO_2.value])
+
+
 
         # if solution:
         #     end_time = (time.time() - start_time)
